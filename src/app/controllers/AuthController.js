@@ -63,75 +63,73 @@ router.post('/authenticate', async (req, res) => {
     });
 });
 
-router.post('/forgot_password', async(req, res) => {
+router.post('/forgot_password', async (req, res) => {
     const { email } = req.body;
-
-    try {   
-        const user = await User.findOne({ email });
-
-        if (!user) {
-            return res.status(400).send({ error: 'Email or password invalid!' });
+  
+    try {
+      const user = await User.findOne({ email });
+  
+      if (!user) {
+        return res.status(400).send({ error: 'User not found' });
+      }        
+  
+      const token = crypto.randomBytes(20).toString('hex');
+  
+      const now = new Date();
+      now.setHours(now.getHours() + 1);
+  
+      await User.findByIdAndUpdate(user.id, {
+        '$set': {
+          passwordResetToken: token,
+          passwordResetExpires: now,
         }
-
-        const token = crypto.randomBytes(20).toString('hex');
-
-        const now = new Date();
-        now.setHours(now.getHours() + 1);
-
-        await User.findByIdAndUpdate(user.id, {            
-            '$set': {                
-                passwordResetToken: token,
-                passwordResetExpires: now,
-            }
-        });
-
-        mailer.sendMail({
-            to: email,
-            from: 'pedro@gmail.com',
-            template: '../../resources/mail/auth/forgot_password',
-            context: { token },
-        }, (err) => {
-            if (err) { 
-                console.log(err);
-                res.status(400).send({ error: 'Cannot send forgot password email!' })
-            }
-
-            return res.send();
-         })        
+      });
+  
+      mailer.sendMail({
+        to: email,
+        from: 'diego@rocketseat.com.br',
+        template: 'auth/forgot_password',
+        context: { token },
+      }, (err) => {
+        if (err) {
+            return res.status(400).send({ error: 'Cannot send forgot password email' });
+        }          
+  
+        return res.send();
+      })
     } catch (err) {
-        console.log(err);
-        res.status(400).send({ error: "Error on forgot password, please try again!" });
+      res.status(400).send({ error: 'Error on forgot password, try again' });
     }
 });
-
-router.post('/reset_password', async(req, res) => {
+  
+router.post('/reset_password', async (req, res) => {
     const { email, token, password } = req.body;
 
     try {
-        const user = User.findOne({ email })
+        const user = await User.findOne({ email })
             .select('+passwordResetToken passwordResetExpires');
 
         if (!user) {
-            return res.status(400).send({ error: 'Email or password invalid!' });
-        }
+            return res.status(400).send({ error: 'User not found' });
+        }        
 
-        if (token !== user.passwordResetToken) {            
-            return res.status(400).send({ error: 'Invalid token!' });
-        }
+        if (token !== user.passwordResetToken) {
+            return res.status(400).send({ error: 'Token invalid' });
+        }        
 
         const now = new Date();
+
         if (now > user.passwordResetExpires) {
-            res.status(400).send({ error: 'Token expired, please generate a new one!' });
-        }
+            return res.status(400).send({ error: 'Token expired, generate a new one' });
+        }    
 
-        user.password = password;                        
+        user.password = password;
 
-        await user.save(function(){});
+        await user.save();
 
-        return res.send();
+        res.send();
     } catch (err) {
-        console.log(err);
-        res.status(400).send({ error: "Cannot reset password, please try again!" })
+        res.status(400).send({ error: 'Cannot reset password, try again' });
     }
 });
 
